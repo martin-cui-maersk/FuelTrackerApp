@@ -83,7 +83,7 @@ struct VehicleDetailView: View {
                                 Image(systemName: "fuelpump")
                                     .font(.caption)
                                     .foregroundColor(.orange)
-                                Text("总加油")
+                                Text("总油量")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
