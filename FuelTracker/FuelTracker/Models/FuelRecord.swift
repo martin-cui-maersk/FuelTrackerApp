@@ -8,16 +8,19 @@ struct FuelRecord: Identifiable, Codable, Hashable {
     var totalPrice: Double        // 实付金额（元）
     var pricePerLiter: Double     // 单价（元/升）- 自动计算
     var isFullTank: Bool          // 是否加满（用于油耗计算）
+    /// 本次加油时油表低油量/油灯是否已亮（纯油车场景：与上次加满配合时，本段耗油按上次加油量估算）
+    var lowFuelLightOnAtRefuel: Bool
     var date: Date                // 加油时间
     var note: String              // 备注
     
-    init(id: UUID = UUID(), odometer: Double, fuelAmount: Double, totalPrice: Double, isFullTank: Bool = true, date: Date = Date(), note: String = "") {
+    init(id: UUID = UUID(), odometer: Double, fuelAmount: Double, totalPrice: Double, isFullTank: Bool = true, lowFuelLightOnAtRefuel: Bool = false, date: Date = Date(), note: String = "") {
         self.id = id
         self.odometer = odometer
         self.fuelAmount = fuelAmount
         self.totalPrice = totalPrice
         self.pricePerLiter = fuelAmount > 0 ? totalPrice / fuelAmount : 0
         self.isFullTank = isFullTank
+        self.lowFuelLightOnAtRefuel = lowFuelLightOnAtRefuel
         self.date = date
         self.note = note
     }
@@ -31,12 +34,13 @@ struct FuelRecord: Identifiable, Codable, Hashable {
         totalPrice = try container.decode(Double.self, forKey: .totalPrice)
         pricePerLiter = try container.decodeIfPresent(Double.self, forKey: .pricePerLiter) ?? (fuelAmount > 0 ? totalPrice / fuelAmount : 0)
         isFullTank = try container.decodeIfPresent(Bool.self, forKey: .isFullTank) ?? true
+        lowFuelLightOnAtRefuel = try container.decodeIfPresent(Bool.self, forKey: .lowFuelLightOnAtRefuel) ?? false
         date = try container.decode(Date.self, forKey: .date)
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, odometer, fuelAmount, totalPrice, pricePerLiter, isFullTank, date, note
+        case id, odometer, fuelAmount, totalPrice, pricePerLiter, isFullTank, lowFuelLightOnAtRefuel, date, note
     }
 }
 
