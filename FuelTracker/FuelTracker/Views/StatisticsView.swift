@@ -101,7 +101,9 @@ struct StatisticsView: View {
             let distance = current.odometer - prev.odometer
 
             if distance > 0 {
-                let singleConsumption = current.fuelAmount / distance * 100
+                let useLastFullTankAsConsumed = !current.isFullTank && current.lowFuelLightOnAtRefuel && prev.isFullTank
+                let segmentFuelLiters = useLastFullTankAsConsumed ? prev.fuelAmount : current.fuelAmount
+                let singleConsumption = segmentFuelLiters / distance * 100
                 weightedSum += singleConsumption * distance
                 totalDistance += distance
             }
@@ -220,37 +222,46 @@ struct StatisticsView: View {
     // 加满记录:用上一个加满到本次加满的区间油耗
     // 未加满记录:用本次到下一个加满的区间油耗
     private func fuelConsumptionForRecord(_ record: FuelRecord, from records: [FuelRecord]) -> Double? {
-        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return nil }
+        let sortedByOdo = records.sorted { $0.odometer < $1.odometer }
+        guard let index = sortedByOdo.firstIndex(where: { $0.id == record.id }) else { return nil }
         guard index > 0 else { return nil }
+
+        let prevAdjacent = sortedByOdo[index - 1]
+        let currentRec = sortedByOdo[index]
+        let segmentDistance = currentRec.odometer - prevAdjacent.odometer
+        if segmentDistance > 0, !currentRec.isFullTank, currentRec.lowFuelLightOnAtRefuel, prevAdjacent.isFullTank {
+            let result = prevAdjacent.fuelAmount / segmentDistance * 100
+            return round(result * 100) / 100
+        }
 
         // 找上一个加满记录
         var prevFullTankIndex = index - 1
-        while prevFullTankIndex >= 0 && !records[prevFullTankIndex].isFullTank {
+        while prevFullTankIndex >= 0 && !sortedByOdo[prevFullTankIndex].isFullTank {
             prevFullTankIndex -= 1
         }
-        guard prevFullTankIndex >= 0 && records[prevFullTankIndex].isFullTank else { return nil }
+        guard prevFullTankIndex >= 0 && sortedByOdo[prevFullTankIndex].isFullTank else { return nil }
 
         // 如果当前是加满记录,计算从上一个加满到本次加满的区间油耗
         // 如果当前是未加满记录,需要找到下一个加满记录才能计算完整区间
         var nextFullTankIndex = index
         if !record.isFullTank {
             nextFullTankIndex = index + 1
-            while nextFullTankIndex < records.count && !records[nextFullTankIndex].isFullTank {
+            while nextFullTankIndex < sortedByOdo.count && !sortedByOdo[nextFullTankIndex].isFullTank {
                 nextFullTankIndex += 1
             }
-            guard nextFullTankIndex < records.count && records[nextFullTankIndex].isFullTank else { return nil }
+            guard nextFullTankIndex < sortedByOdo.count && sortedByOdo[nextFullTankIndex].isFullTank else { return nil }
         }
 
         // 计算区间总油耗
-        let prevFullTank = records[prevFullTankIndex]
-        let nextFullTank = records[nextFullTankIndex]
+        let prevFullTank = sortedByOdo[prevFullTankIndex]
+        let nextFullTank = sortedByOdo[nextFullTankIndex]
         let intervalDistance = nextFullTank.odometer - prevFullTank.odometer
         guard intervalDistance > 0 else { return nil }
 
         // 区间总加油量
         var intervalFuel = 0.0
         for i in (prevFullTankIndex + 1)..<(nextFullTankIndex + 1) {
-            intervalFuel += records[i].fuelAmount
+            intervalFuel += sortedByOdo[i].fuelAmount
         }
 
         // 区间总油耗 (L/100km)
@@ -609,55 +620,20 @@ struct StatCard: View {
     return StatisticsView(vehicle: vehicle)
 }
 
-// 油耗计算说明页面
+// 油耗计算说明页面（与 Vehicle.swift 及统计页中的油车逻辑一致）
 struct FuelCalculationInfoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // 单次油耗计算
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("单次油耗是怎么计算的?")
+                    Text("适用范围与排序")
                         .font(.headline)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.primary)
 
-                    Text("对于燃油车,单次油耗是连续两次加油期间的油耗。")
+                    Text("以下公式适用于油车；混动车仅对「加油记录」使用相同油耗逻辑。所有加油记录均按里程表读数从小到大排序后再计算（与加油日期无关）。")
                         .font(.subheadline)
 
-                    Text("算法1(加满到加满):两次都是加满,跳枪为准\n单次油耗 = 本次加油量 ÷ (本次里程 - 上次加满里程) × 100")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Text("算法2(亮灯到亮灯):两次都是油灯亮起\n单次油耗 = 第一次加油量 ÷ 两次之间里程 × 100")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Text("算法3(未加满记录):如果中间有未加满的记录\n需要计算整个区间的百公里油耗:从上一次加满到下一次加满之间,所有加油量总和 ÷ 整个区间里程 × 100\n这两次加油的油耗值相同")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Text("优先采用算法1(加满)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(10)
-
-                // 平均油耗计算
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("平均油耗是怎么计算的?")
-                        .font(.headline)
-                        .foregroundColor(.orange)
-
-                    Text("采用小熊油耗的「加权平均」算法:")
-                        .font(.subheadline)
-
-                    Text("平均油耗 = Σ(单次油耗 × 权重)\n权重 = 单次行程 ÷ 行程总和")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Text("为什么用加权平均?\n加油量往往不等于消耗的油量,加权平均在各种复杂记录情况下(有时加满、有时亮灯)都能得到准确结果。")
+                    Text("相邻两次加油之间的行程 = 本条里程 − 上一条里程。第一条记录没有上一条，不参与油耗计算。")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -665,16 +641,19 @@ struct FuelCalculationInfoView: View {
                 .background(Color(.systemBackground))
                 .cornerRadius(10)
 
-                // 公认公式对比
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("与公认公式对比")
+                    Text("本段估耗油量（升）")
                         .font(.headline)
-                        .foregroundColor(.green)
+                        .foregroundColor(.orange)
 
-                    Text("公认公式:耗油量 ÷ 行驶里程 × 100")
+                    Text("在计算「平均油耗」时，每一对相邻记录会先确定本段估耗油量 L：")
                         .font(.subheadline)
 
-                    Text("示例:熊大记录276次加油,总加油量13159.36L,总行程129047km\n公认公式:13159.36 ÷ 129047 × 100 = 10.15 L/100km\n加权平均:10.18 L/100km\n差异仅0.2%")
+                    Text("• 默认：L = 本条记录的加油量（升）。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("• 若同时满足：①本条为「未加满」；②本条开启「加油时油灯已亮」；③上一条为「加满」，则 L = 上一条的加油量。含义是：上箱加满后跑到油灯亮，本段消耗近似为上一箱加进去的油量。")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -682,16 +661,111 @@ struct FuelCalculationInfoView: View {
                 .background(Color(.systemBackground))
                 .cornerRadius(10)
 
-                // 每公里费用
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("每公里费用")
+                    Text("平均油耗（L/100km）")
+                        .font(.headline)
+                        .foregroundColor(.orange)
+
+                    Text("采用小熊油耗思路的行程加权：对每一对相邻记录，若行程 d > 0，则单次百公里油耗 = L ÷ d × 100。")
+                        .font(.subheadline)
+
+                    Text("平均油耗 = Σ(单次百公里油耗 × d) ÷ Σd\n数学上等价于：平均油耗 = (Σ L) × 100 ÷ Σd（因单次油耗 × d = L × 100）。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("金额、升数在累加时按整数「分」「毫升」换算再累加，减少浮点误差；结果保留两位小数。统计页在选定时间范围内筛选记录后，使用相同规则。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("列表与趋势中的「单次油耗」")
+                        .font(.headline)
+                        .foregroundColor(.orange)
+
+                    Text("车辆详情每条加油下方的百公里、统计页的油耗趋势/最低/最高，使用同一套「单次展示油耗」算法（与平均油耗的相邻段法不同）。")
+                        .font(.subheadline)
+
+                    Text("一、油灯 + 未加满 + 上次加满（与上面 L 的特殊条件一致）\n若本条与上一条之间的里程 d > 0，则展示百公里 = 上一条加油量 ÷ d × 100。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("二、否则：「上一个加满 → 下一个加满」区间法\n• 从本条向前找到最近一条「加满」作为区间起点（里程记为 A）。\n• 若本条本身是加满，区间终点取本条；若本条未加满，则向后找到最近一条「加满」作为终点（里程记为 B）；若后面没有加满则无法计算。\n• 区间里程 = B − A。\n• 区间总加油量 = 从「起点加满的下一条」一直到「终点那条」为止，所有记录的加油量（升）之和。\n• 展示百公里 = 区间总加油量 ÷ 区间里程 × 100。\n同一区间内每条参与该区间计算的记录，展示的百公里数值相同。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("行程耗油量、行程油费、每公里油费")
                         .font(.headline)
                         .foregroundColor(.blue)
 
-                    Text("计算公式:总油费 ÷ 总里程")
+                    Text("行程耗油量（升）= 上述「单次展示油耗」÷ 100 × 本条与上一条之间的里程 d。")
                         .font(.subheadline)
 
-                    Text("说明:单位为元/公里")
+                    Text("行程油费（元）= 行程耗油量 × 上一条记录的每升单价（由上一条实付与加油量自动算出）。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("每公里油费（元/km）= 行程油费 ÷ d。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("加满法辅助量（总加油量与里程）")
+                        .font(.headline)
+                        .foregroundColor(.green)
+
+                    Text("用于部分汇总：仅统计标记为「加满」的记录。若加满记录不足 2 条，相关量为 0。")
+                        .font(.subheadline)
+
+                    Text("• 用于耗油统计的总升数：从第二条「加满」起，每次加满的加油量之和（第一条加满视为初始油量，不计入消耗侧）。\n• 对应里程：最早一条「加满」与最晚一条「加满」的里程表之差。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("每公里费用（注意：统计页与车辆汇总算法不同）")
+                        .font(.headline)
+                        .foregroundColor(.blue)
+
+                    Text("统计页「每公里」卡片：在两个相邻的「加满」点之间形成一个区间；区间内每次加油的实付金额相加得到区间油费，区间里程为两端加满的里程差。对每个区间算「区间油费 ÷ 区间里程」，再按各区间里程加权，得到加权平均每公里油费。")
+                        .font(.subheadline)
+
+                    Text("车辆模型中的平均每公里（如首页汇总）：分子为按里程排序后「从第二条加油记录起」所有加油实付之和；分母为「第一条加满」至「最后一条加满」的里程差（至少两条加满）。与统计页的区间加权可能数值不同。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("单位均为元/公里。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("与「公认公式」的关系")
+                        .font(.headline)
+                        .foregroundColor(.green)
+
+                    Text("常见口径：总消耗燃油 ÷ 总行驶里程 × 100。本应用用行程加权的单次估耗油量 L（含油灯特殊规则）综合成平均油耗，在记录较完整时与公认公式通常接近；小熊油耗等工具也普遍采用类似加权思路。")
+                        .font(.subheadline)
+
+                    Text("示例（概念）：总加油量与总里程算得 10.15 L/100km 时，本应用加权结果可能为 10.18 L/100km 等，差异往往很小。")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

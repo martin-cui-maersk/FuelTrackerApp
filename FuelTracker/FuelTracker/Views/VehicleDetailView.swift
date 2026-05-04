@@ -418,6 +418,16 @@ struct FuelRecordRowView: View {
                             .cornerRadius(4)
                     }
                     
+                    if record.lowFuelLightOnAtRefuel, !record.isFullTank {
+                        Text("油灯亮")
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.red.opacity(0.12))
+                            .foregroundColor(.red)
+                            .cornerRadius(4)
+                    }
+                    
                     Text(record.date, style: .date)
                         .font(.subheadline)
                         .foregroundColor(.secondary)

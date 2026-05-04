@@ -151,8 +151,10 @@ struct Vehicle: Identifiable, Codable, Hashable {
             let distance = current.odometer - prev.odometer
             
             if distance > 0 {
-                // 单次油耗 = 本次加油量 / 行程 × 100
-                let singleConsumption = current.fuelAmount / distance * 100
+                // 单次油耗 = 本段耗油升数 / 行程 × 100；若本次油灯亮且上次加满，本段耗油按上次加油量计
+                let useLastFullTankAsConsumed = !current.isFullTank && current.lowFuelLightOnAtRefuel && prev.isFullTank
+                let segmentFuelLiters = useLastFullTankAsConsumed ? prev.fuelAmount : current.fuelAmount
+                let singleConsumption = segmentFuelLiters / distance * 100
                 weightedSum += singleConsumption * distance
                 totalDistance += distance
             }
@@ -322,6 +324,14 @@ struct Vehicle: Identifiable, Codable, Hashable {
         let sorted = fuelRecords.sorted { $0.odometer < $1.odometer }
         guard let index = sorted.firstIndex(where: { $0.id == record.id }) else { return nil }
         guard index > 0 else { return nil } // 第一条无法计算
+        
+        let prevAdjacent = sorted[index - 1]
+        let currentRec = sorted[index]
+        let segmentDistance = currentRec.odometer - prevAdjacent.odometer
+        if segmentDistance > 0, !currentRec.isFullTank, currentRec.lowFuelLightOnAtRefuel, prevAdjacent.isFullTank {
+            let result = prevAdjacent.fuelAmount / segmentDistance * 100
+            return round(result * 100) / 100
+        }
         
         // 找上一个加满记录
         var prevFullTankIndex = index - 1

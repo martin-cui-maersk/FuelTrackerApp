@@ -8,7 +8,7 @@ struct FuelRecord: Identifiable, Codable, Hashable {
     var totalPrice: Double        // 实付金额（元）
     var pricePerLiter: Double     // 单价（元/升）- 自动计算
     var isFullTank: Bool          // 是否加满（用于油耗计算）
-    /// 本次加油时油表低油量/油灯是否已亮（纯油车场景：与上次加满配合时，本段耗油按上次加油量估算）
+    /// 本次加油时油灯是否已亮；仅在与「本次未加满 + 上次加满」同时成立时，本段耗油量按上次加油量计算
     var lowFuelLightOnAtRefuel: Bool
     var date: Date                // 加油时间
     var note: String              // 备注

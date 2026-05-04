@@ -11,6 +11,7 @@ struct AddFuelRecordView: View {
     @State private var totalPrice = ""
     @State private var fuelAmount = ""
     @State private var isFullTank = true  // 默认加满
+    @State private var lowFuelLightOnAtRefuel = false
     @State private var date = Date()
     @State private var note = ""
     @State private var showDatePicker = false
@@ -30,8 +31,17 @@ struct AddFuelRecordView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Button("取消", role: .cancel, action: { dismiss() })
+                        Spacer()
+                        Button("保存", action: { saveRecord() })
+                            .disabled(!isValid)
+                            .fontWeight(.semibold)
+                    }
+                }
                 Section(header: Text("加油信息")) {
                     HStack {
                         Text("里程(km)")
@@ -73,6 +83,19 @@ struct AddFuelRecordView: View {
                     }
                 }
                 
+                if vehicle.type == .fuel, !isFullTank {
+                    Section(header: Text("油灯状态")) {
+                        Toggle(isOn: $lowFuelLightOnAtRefuel) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("加油时油灯已亮")
+                                Text("上次为加满时，本段耗油量按上次加油量计算。")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
                 Section(header: Text("时间")) {
                     Button(action: { showDatePicker = true }) {
                         HStack {
@@ -89,8 +112,8 @@ struct AddFuelRecordView: View {
                     TextField("如：加油站名称", text: $note)
                 }
                 
-                if let pricePerLiter = calculatedPricePerLiter {
-                    Section {
+                Section {
+                    if let pricePerLiter = calculatedPricePerLiter {
                         HStack {
                             Text("单价（自动计算）")
                             Spacer()
@@ -102,32 +125,25 @@ struct AddFuelRecordView: View {
                 }
             }
             .navigationTitle("添加加油记录")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        saveRecord()
-                    }
-                    .disabled(!isValid)
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationView {
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack(spacing: 16) {
                     DatePicker("加油时间", selection: $date, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
-                        .navigationTitle("选择日期")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("确定") { showDatePicker = false }
-                            }
-                        }
+                        .padding(.horizontal)
+                    Button("确定", action: { showDatePicker = false })
+                        .fontWeight(.semibold)
                 }
-                .presentationDetents([.medium])
+                .padding(.vertical)
+                .navigationTitle("选择日期")
+                .navigationBarTitleDisplayMode(.inline)
             }
+            .presentationDetents([.medium])
+        }
+        .onChange(of: isFullTank) { isFull in
+            if isFull { lowFuelLightOnAtRefuel = false }
         }
     }
     
@@ -151,6 +167,7 @@ struct AddFuelRecordView: View {
             fuelAmount: fuel,
             totalPrice: total,
             isFullTank: isFullTank,
+            lowFuelLightOnAtRefuel: (vehicle.type == .fuel && !isFullTank) ? lowFuelLightOnAtRefuel : false,
             date: date,
             note: note
         )
@@ -170,6 +187,7 @@ struct EditFuelRecordView: View {
     @State private var totalPrice: String
     @State private var fuelAmount: String
     @State private var isFullTank: Bool
+    @State private var lowFuelLightOnAtRefuel: Bool
     @State private var date: Date
     @State private var note: String
     @State private var showDatePicker = false
@@ -187,13 +205,23 @@ struct EditFuelRecordView: View {
         self._totalPrice = State(initialValue: String(format: "%.2f", record.totalPrice))
         self._fuelAmount = State(initialValue: String(format: "%.2f", record.fuelAmount))
         self._isFullTank = State(initialValue: record.isFullTank)
+        self._lowFuelLightOnAtRefuel = State(initialValue: record.lowFuelLightOnAtRefuel)
         self._date = State(initialValue: record.date)
         self._note = State(initialValue: record.note)
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Button("取消", role: .cancel, action: { dismiss() })
+                        Spacer()
+                        Button("保存", action: { saveRecord() })
+                            .disabled(!isValid)
+                            .fontWeight(.semibold)
+                    }
+                }
                 Section(header: Text("加油信息")) {
                     HStack {
                         Text("里程(km)")
@@ -230,6 +258,19 @@ struct EditFuelRecordView: View {
                     }
                 }
                 
+                if vehicle.type == .fuel, !isFullTank {
+                    Section(header: Text("油灯状态")) {
+                        Toggle(isOn: $lowFuelLightOnAtRefuel) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("加油时油灯已亮")
+                                Text("上次为加满时，本段耗油量按上次加油量计算。")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
                 Section(header: Text("时间")) {
                     Button(action: { showDatePicker = true }) {
                         HStack {
@@ -246,8 +287,8 @@ struct EditFuelRecordView: View {
                     TextField("备注", text: $note)
                 }
                 
-                if let pricePerLiter = calculatedPricePerLiter {
-                    Section {
+                Section {
+                    if let pricePerLiter = calculatedPricePerLiter {
                         HStack {
                             Text("单价（自动计算）")
                             Spacer()
@@ -259,32 +300,25 @@ struct EditFuelRecordView: View {
                 }
             }
             .navigationTitle("编辑加油记录")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        saveRecord()
-                    }
-                    .disabled(!isValid)
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationView {
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack(spacing: 16) {
                     DatePicker("加油时间", selection: $date, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
-                        .navigationTitle("选择日期")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("确定") { showDatePicker = false }
-                            }
-                        }
+                        .padding(.horizontal)
+                    Button("确定", action: { showDatePicker = false })
+                        .fontWeight(.semibold)
                 }
-                .presentationDetents([.medium])
+                .padding(.vertical)
+                .navigationTitle("选择日期")
+                .navigationBarTitleDisplayMode(.inline)
             }
+            .presentationDetents([.medium])
+        }
+        .onChange(of: isFullTank) { isFull in
+            if isFull { lowFuelLightOnAtRefuel = false }
         }
     }
     
@@ -308,6 +342,7 @@ struct EditFuelRecordView: View {
         updated.totalPrice = total
         updated.pricePerLiter = fuel > 0 ? total / fuel : 0
         updated.isFullTank = isFullTank
+        updated.lowFuelLightOnAtRefuel = (vehicle.type == .fuel && !isFullTank) ? lowFuelLightOnAtRefuel : false
         updated.date = date
         updated.note = note
         
@@ -348,8 +383,17 @@ struct AddChargeRecordView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Button("取消", role: .cancel, action: { dismiss() })
+                        Spacer()
+                        Button("保存", action: { saveRecord() })
+                            .disabled(!isValid)
+                            .fontWeight(.semibold)
+                    }
+                }
                 Section(header: Text("充电信息")) {
                     HStack {
                         Text("里程(km)")
@@ -425,8 +469,8 @@ struct AddChargeRecordView: View {
                     TextField("如：充电站名称", text: $note)
                 }
                 
-                if let pricePerKwh = calculatedPricePerKwh {
-                    Section {
+                Section {
+                    if let pricePerKwh = calculatedPricePerKwh {
                         HStack {
                             Text("单价（自动计算）")
                             Spacer()
@@ -438,32 +482,22 @@ struct AddChargeRecordView: View {
                 }
             }
             .navigationTitle("添加充电记录")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        saveRecord()
-                    }
-                    .disabled(!isValid)
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationView {
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack(spacing: 16) {
                     DatePicker("充电时间", selection: $date, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
-                        .navigationTitle("选择日期")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("确定") { showDatePicker = false }
-                            }
-                        }
+                        .padding(.horizontal)
+                    Button("确定", action: { showDatePicker = false })
+                        .fontWeight(.semibold)
                 }
-                .presentationDetents([.medium])
+                .padding(.vertical)
+                .navigationTitle("选择日期")
+                .navigationBarTitleDisplayMode(.inline)
             }
+            .presentationDetents([.medium])
         }
     }
     
@@ -542,8 +576,17 @@ struct EditChargeRecordView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Button("取消", role: .cancel, action: { dismiss() })
+                        Spacer()
+                        Button("保存", action: { saveRecord() })
+                            .disabled(!isValid)
+                            .fontWeight(.semibold)
+                    }
+                }
                 Section(header: Text("充电信息")) {
                     HStack {
                         Text("里程(km)")
@@ -610,8 +653,8 @@ struct EditChargeRecordView: View {
                     TextField("备注", text: $note)
                 }
                 
-                if let pricePerKwh = calculatedPricePerKwh {
-                    Section {
+                Section {
+                    if let pricePerKwh = calculatedPricePerKwh {
                         HStack {
                             Text("单价（自动计算）")
                             Spacer()
@@ -623,32 +666,22 @@ struct EditChargeRecordView: View {
                 }
             }
             .navigationTitle("编辑充电记录")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        saveRecord()
-                    }
-                    .disabled(!isValid)
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationView {
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                VStack(spacing: 16) {
                     DatePicker("充电时间", selection: $date, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
-                        .navigationTitle("选择日期")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("确定") { showDatePicker = false }
-                            }
-                        }
+                        .padding(.horizontal)
+                    Button("确定", action: { showDatePicker = false })
+                        .fontWeight(.semibold)
                 }
-                .presentationDetents([.medium])
+                .padding(.vertical)
+                .navigationTitle("选择日期")
+                .navigationBarTitleDisplayMode(.inline)
             }
+            .presentationDetents([.medium])
         }
     }
     

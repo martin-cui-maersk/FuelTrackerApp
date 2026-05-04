@@ -77,9 +77,9 @@ class DataStore: ObservableObject {
     }
     
     // 添加加油记录
-    func addFuelRecord(to vehicle: Vehicle, odometer: Double, fuelAmount: Double, totalPrice: Double, isFullTank: Bool = true, date: Date = Date(), note: String = "") {
+    func addFuelRecord(to vehicle: Vehicle, odometer: Double, fuelAmount: Double, totalPrice: Double, isFullTank: Bool = true, lowFuelLightOnAtRefuel: Bool = false, date: Date = Date(), note: String = "") {
         guard let index = vehicles.firstIndex(where: { $0.id == vehicle.id }) else { return }
-        let record = FuelRecord(odometer: odometer, fuelAmount: fuelAmount, totalPrice: totalPrice, isFullTank: isFullTank, date: date, note: note)
+        let record = FuelRecord(odometer: odometer, fuelAmount: fuelAmount, totalPrice: totalPrice, isFullTank: isFullTank, lowFuelLightOnAtRefuel: lowFuelLightOnAtRefuel, date: date, note: note)
         vehicles[index].fuelRecords.append(record)
         saveVehicles()
     }
